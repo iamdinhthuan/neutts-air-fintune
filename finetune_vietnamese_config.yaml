@@ -1,0 +1,38 @@
+# Vietnamese Finetuning Configuration for NeuTTS-Air
+
+# Model settings
+restore_from: "neuphonic/neutts-air"  # Pre-trained model to start from
+codebook_size: 65536  # NeuCodec codebook size (don't change)
+max_seq_len: 2048     # Maximum sequence length
+
+# Dataset Configuration
+# Option 1: Use pre-encoded pickle file (faster, but requires pre-processing)
+# dataset_path: "vietnamese_dataset.pkl"
+
+# Option 2: Use CSV metadata for ON-THE-FLY encoding (RECOMMENDED - no pre-processing needed!)
+dataset_path: "/media/huy/data1tb/thuan/dataset/metadata.csv"
+audio_dir: "/media/huy/data1tb/thuan/dataset/wavs"  # Directory containing audio files (relative to metadata.csv or absolute path)
+
+# IMPORTANT: Limit number of samples for testing (set to null for full dataset)
+max_samples: null  # null = use ALL samples (2.6M), or set a number like 10000
+
+# Training hyperparameters
+lr: 0.00004                    # Learning rate (4e-5)
+lr_scheduler_type: "cosine"    # Learning rate scheduler
+warmup_ratio: 0.05             # Warmup ratio (5% of total steps)
+
+# Training configuration
+per_device_train_batch_size: 1  # Batch size per GPU
+gradient_accumulation_steps: 4   # Accumulate gradients over N steps (effective batch = 2 * 4 = 8)
+num_train_epochs: 3              # Number of epochs to train
+logging_steps: 100                # Log every N steps
+save_steps: 5000                 # Save checkpoint every N steps
+eval_steps: 5000                 # Evaluate every N steps (if eval dataset exists)
+
+# Output
+save_root: "./checkpoints"      # Root directory for checkpoints
+run_name: "neutts-vietnamese"   # Name of this training run
+
+# Other
+seed: 1337                      # Random seed for reproducibility
+
