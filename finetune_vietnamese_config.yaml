@@ -22,12 +22,19 @@ lr_scheduler_type: "cosine"    # Learning rate scheduler
 warmup_ratio: 0.05             # Warmup ratio (5% of total steps)
 
 # Training configuration
-per_device_train_batch_size: 1  # Batch size per GPU
-gradient_accumulation_steps: 4   # Accumulate gradients over N steps (effective batch = 2 * 4 = 8)
+per_device_train_batch_size: 4   # Batch size per GPU (tăng từ 1 → 4 vì dùng pre-encoded)
+gradient_accumulation_steps: 2   # Accumulate gradients over N steps (effective batch = 4 * 2 = 8)
 num_train_epochs: 3              # Number of epochs to train
-logging_steps: 100                # Log every N steps
+logging_steps: 100               # Log every N steps
 save_steps: 5000                 # Save checkpoint every N steps
-eval_steps: 5000                 # Evaluate every N steps (if eval dataset exists)
+eval_steps: 10000                # Evaluate every N steps (giảm tần suất eval để nhanh hơn)
+
+# Speed optimizations (KHUYẾN NGHỊ BẬT TẤT CẢ!)
+torch_compile: false             # PyTorch 2.0 compile (nhanh ~10-20% nhưng cần PyTorch 2.0+)
+gradient_checkpointing: false    # Tiết kiệm VRAM nhưng chậm ~20% (chỉ bật nếu OOM)
+tf32: true                       # TF32 cho GPU Ampere+ (RTX 30xx, A100) - nhanh ~20%
+dataloader_pin_memory: true      # Pin memory cho faster GPU transfer
+dataloader_prefetch_factor: 2    # Prefetch 2 batches ahead
 
 # Output
 save_root: "./checkpoints"      # Root directory for checkpoints
