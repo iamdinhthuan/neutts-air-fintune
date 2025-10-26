@@ -398,21 +398,12 @@ def main(config_fpath: str):
         dataset.set_format(type=None)  # Keep original format
 
     else:
-        # PRE-ENCODED MODE: Process all samples now
+        # PRE-ENCODED MODE: Don't preprocess! Will do on-the-fly with collator
         print(f"  📦 USING PRE-ENCODED DATA")
-        print(f"  Preprocessing all samples...")
+        print(f"  ⚡ Will preprocess on-the-fly during training (saves RAM!)")
 
-        columns_to_remove = [col for col in dataset.column_names if col not in ["input_ids", "labels", "attention_mask"]]
-
-        dataset = dataset.map(
-            partial_preprocess,
-            remove_columns=columns_to_remove,
-            desc="Preprocessing",
-            num_proc=4,
-        )
-
-        # Remove None samples (failed preprocessing)
-        dataset = dataset.filter(lambda x: x is not None)
+        # Keep original format - don't load everything into RAM
+        dataset.set_format(type=None)
 
     print(f"✓ Dataset ready: {len(dataset)} samples")
 
@@ -427,17 +418,18 @@ def main(config_fpath: str):
     # Setup training
     print(f"\n[7/7] Setting up training...")
 
-    # Choose data collator based on mode
+    # Always use custom collator for on-the-fly preprocessing
+    # This saves RAM by not loading all samples at once
+    data_collator = OnTheFlyDataCollator(partial_preprocess)
+    print(f"  Using OnTheFlyDataCollator (on-the-fly preprocessing)")
+
+    # Set num_workers based on whether we need CUDA for encoding
     if codec is not None:
-        # On-the-fly: Use custom collator
-        data_collator = OnTheFlyDataCollator(partial_preprocess)
-        print(f"  Using OnTheFlyDataCollator (will encode during training)")
-        dataloader_num_workers = 0  # Must be 0 for CUDA
+        dataloader_num_workers = 0  # Must be 0 for CUDA encoding
+        print(f"  Dataloader workers: 0 (CUDA encoding)")
     else:
-        # Pre-encoded: Use default collator
-        data_collator = default_data_collator
-        print(f"  Using default data collator")
-        dataloader_num_workers = 4
+        dataloader_num_workers = 4  # Can use multiple workers for pre-encoded
+        print(f"  Dataloader workers: 4 (pre-encoded data)")
 
     # Use epochs or max_steps (epochs takes priority)
     num_train_epochs = getattr(config, 'num_train_epochs', None)
