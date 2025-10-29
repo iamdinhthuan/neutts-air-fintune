@@ -474,7 +474,6 @@ def main(config_fpath: str):
         remove_unused_columns=False,
         torch_compile=True,  # Disable for compatibility
         dataloader_num_workers=dataloader_num_workers,
-        resume_from_checkpoint=resume_from_checkpoint,  # Resume from checkpoint if available
     )
 
     trainer = Trainer(
@@ -508,7 +507,12 @@ def main(config_fpath: str):
     print("=" * 60 + "\n")
     
     # Train!
-    trainer.train()
+    if resume_from_checkpoint:
+        print(f"🔄 Resuming training from: {resume_from_checkpoint}")
+        trainer.train(resume_from_checkpoint=resume_from_checkpoint)
+    else:
+        print("🚀 Starting training from scratch")
+        trainer.train()
     
     # Save final model
     print("\n" + "=" * 60)
