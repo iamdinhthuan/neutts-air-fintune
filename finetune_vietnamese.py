@@ -428,7 +428,7 @@ def main(config_fpath: str):
         dataloader_num_workers = 0  # Must be 0 for CUDA encoding
         print(f"  Dataloader workers: 0 (CUDA encoding)")
     else:
-        dataloader_num_workers = 8  # Can use multiple workers for pre-encoded
+        dataloader_num_workers = 16  # Can use multiple workers for pre-encoded
         print(f"  Dataloader workers: 8 (pre-encoded data)")
 
     # Use epochs or max_steps (epochs takes priority)
@@ -436,19 +436,6 @@ def main(config_fpath: str):
     max_steps = getattr(config, 'max_steps', -1)
     eval_steps = getattr(config, 'eval_steps', config.save_steps)
     gradient_accumulation_steps = getattr(config, 'gradient_accumulation_steps', 1)
-
-    # Speed optimizations
-    use_torch_compile = getattr(config, 'torch_compile', False)
-    gradient_checkpointing = getattr(config, 'gradient_checkpointing', False)
-    tf32 = getattr(config, 'tf32', True)  # Enable TF32 for Ampere+ GPUs
-    dataloader_pin_memory = getattr(config, 'dataloader_pin_memory', True)
-    dataloader_prefetch_factor = getattr(config, 'dataloader_prefetch_factor', 2)
-
-    # Enable TF32 for faster training on Ampere GPUs (RTX 30xx, A100, etc.)
-    if tf32 and torch.cuda.is_available():
-        torch.backends.cuda.matmul.allow_tf32 = True
-        torch.backends.cudnn.allow_tf32 = True
-        print(f"  ✓ TF32 enabled for faster training")
 
     training_args = TrainingArguments(
         output_dir=checkpoints_dir,
@@ -459,27 +446,22 @@ def main(config_fpath: str):
         max_steps=max_steps if not num_train_epochs else -1,
         bf16=True,
         per_device_train_batch_size=config.per_device_train_batch_size,
-        per_device_eval_batch_size=config.per_device_train_batch_size,
-        gradient_accumulation_steps=gradient_accumulation_steps,
-        gradient_checkpointing=gradient_checkpointing,  # Trade memory for speed
+        per_device_eval_batch_size=config.per_device_train_batch_size,  # Same as train
+        gradient_accumulation_steps=gradient_accumulation_steps,  # Gradient accumulation
         warmup_ratio=config.warmup_ratio,
         save_steps=config.save_steps,
         eval_steps=eval_steps,
         logging_steps=config.logging_steps,
         save_strategy="steps",
-        eval_strategy="steps",
-        load_best_model_at_end=False,
+        eval_strategy="steps",  # Eval every eval_steps
+        load_best_model_at_end=False,  # Don't load best (too slow with large model)
         metric_for_best_model="loss",
         greater_is_better=False,
         ignore_data_skip=True,
         dataloader_drop_last=True,
         remove_unused_columns=False,
-        torch_compile=use_torch_compile,  # PyTorch 2.0 compilation
+        torch_compile=True,  # Disable for compatibility
         dataloader_num_workers=dataloader_num_workers,
-        dataloader_pin_memory=dataloader_pin_memory,  # Faster data transfer to GPU
-        dataloader_prefetch_factor=dataloader_prefetch_factor if dataloader_num_workers > 0 else None,  # Prefetch batches
-        optim="adamw_torch_fused",  # Faster fused AdamW optimizer
-        ddp_find_unused_parameters=False,  # Faster DDP
     )
 
     trainer = Trainer(
