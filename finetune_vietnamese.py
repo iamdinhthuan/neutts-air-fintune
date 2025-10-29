@@ -437,6 +437,18 @@ def main(config_fpath: str):
     eval_steps = getattr(config, 'eval_steps', config.save_steps)
     gradient_accumulation_steps = getattr(config, 'gradient_accumulation_steps', 1)
 
+    # Check if we should resume from checkpoint
+    resume_from_checkpoint = None
+    if restore_from.startswith("./checkpoints/") and os.path.exists(restore_from):
+        # This is a checkpoint path, check if it has trainer_state.json
+        trainer_state_path = os.path.join(restore_from, "trainer_state.json")
+        if os.path.exists(trainer_state_path):
+            resume_from_checkpoint = restore_from
+            print(f"🔄 Will resume training from checkpoint: {restore_from}")
+        else:
+            print(f"⚠️  Checkpoint {restore_from} exists but no trainer_state.json found")
+            print(f"   Will start training from scratch with this model")
+
     training_args = TrainingArguments(
         output_dir=checkpoints_dir,
         do_train=True,
@@ -462,6 +474,7 @@ def main(config_fpath: str):
         remove_unused_columns=False,
         torch_compile=True,  # Disable for compatibility
         dataloader_num_workers=dataloader_num_workers,
+        resume_from_checkpoint=resume_from_checkpoint,  # Resume from checkpoint if available
     )
 
     trainer = Trainer(
