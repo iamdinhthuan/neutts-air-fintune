@@ -10,8 +10,8 @@ max_seq_len: 2048     # Maximum sequence length
 dataset_path: "vietnamese_dataset.pkl"
 
 # Option 2: Use CSV metadata for ON-THE-FLY encoding (RECOMMENDED - no pre-processing needed!)
-#dataset_path: "/media/huy/data1tb/thuan/neutts-air/vietnamese_dataset.pkl"
-##audio_dir: "/media/huy/data1tb/thuan/dataset/wavs"  # Directory containing audio files (relative to metadata.csv or absolute path)
+#dataset_path: "vietnamese_dataset.pkl"
+##audio_dir: "/wavs"  # Directory containing audio files (relative to metadata.csv or absolute path)
 
 # IMPORTANT: Limit number of samples for testing (set to null for full dataset)
 max_samples: null  # null = use ALL samples (2.6M), or set a number like 10000

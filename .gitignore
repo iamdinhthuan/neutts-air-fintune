@@ -221,3 +221,4 @@ output*.wav
 
 # IDE
 .idea/
+vietnamese_dataset.pkl

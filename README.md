@@ -1,13 +1,12 @@
 # NeuTTS-Air Vietnamese Finetuning
 
-Huấn luyện mô hình Text-to-Speech NeuTTS-Air cho tiếng Việt với dataset lớn (2.6M+ samples).
+Huấn luyện mô hình Text-to-Speech NeuTTS-Air cho tiếng Việt.
 
 ## ✨ Features
 
 - ✅ **Pre-encoding dataset** - Nhanh gấp 10x so với on-the-fly encoding
 - ✅ **Speed optimizations** - TF32, Fused AdamW, dataloader prefetch
 - ✅ **Memory efficient** - On-the-fly preprocessing, không tràn RAM
-- ✅ **Large dataset support** - Hỗ trợ 2.6M+ samples
 - ✅ **Vietnamese phonemizer** - Tự động chuyển text sang phonemes
 - ✅ **Easy inference** - CLI và quick test script
 
@@ -56,7 +55,7 @@ audio_003.wav|Chúng tôi đang huấn luyện mô hình
 **Lưu ý:**
 - Delimiter: `|` (pipe)
 - Không có header row
-- Audio files: WAV format, 16kHz, mono
+- Audio files: WAV format, mono
 - Text: Tiếng Việt có dấu
 
 ### 2. Pre-encode Dataset (Khuyến nghị!)
