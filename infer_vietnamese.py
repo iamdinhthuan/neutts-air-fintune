@@ -15,6 +15,15 @@ from phonemizer.backend import EspeakBackend
 import re
 import argparse
 
+# Import ViNorm for Vietnamese text normalization
+try:
+    from vinorm import TTSnorm
+    VINORM_AVAILABLE = True
+except ImportError:
+    VINORM_AVAILABLE = False
+    print("Warning: vinorm not installed. Install with: pip install vinorm")
+    print("Text normalization will be skipped.")
+
 
 class VietnameseTTS:
     """Vietnamese TTS using finetuned NeuTTS-Air model."""
@@ -64,14 +73,23 @@ class VietnameseTTS:
         print(f"✓ NeuCodec loaded on {codec_device}")
         
         # Load Vietnamese phonemizer
-        print(f"\n[4/4] Loading Vietnamese phonemizer...")
+        print(f"\n[4/5] Loading Vietnamese phonemizer...")
         self.phonemizer = EspeakBackend(
             language='vi',
             preserve_punctuation=True,
             with_stress=True
         )
         print("✓ Phonemizer loaded")
-        
+
+        # Initialize ViNorm for text normalization
+        print(f"\n[5/5] Initializing Vietnamese text normalizer...")
+        if VINORM_AVAILABLE:
+            self.normalizer = TTSnorm
+            print("✓ ViNorm loaded (text will be normalized)")
+        else:
+            self.normalizer = None
+            print("⚠ ViNorm not available (text normalization skipped)")
+
         print("\n" + "=" * 60)
         print("✅ MODEL READY FOR INFERENCE")
         print("=" * 60)
@@ -99,20 +117,42 @@ class VietnameseTTS:
         print(f"✓ Encoded {len(ref_codes)} codes")
         return ref_codes
     
+    def normalize_text(self, text: str) -> str:
+        """
+        Normalize Vietnamese text using ViNorm.
+
+        Args:
+            text: Raw Vietnamese text
+
+        Returns:
+            str: Normalized text
+        """
+        if self.normalizer is not None:
+            # Normalize with ViNorm
+            # punc=False: keep punctuation
+            # unknown=True: replace unknown words
+            # lower=False: keep original case
+            # rule=False: use dictionary checking
+            normalized = self.normalizer(text, punc=False, unknown=True, lower=False, rule=False)
+            return normalized
+        else:
+            # No normalization available
+            return text
+
     def phonemize(self, text: str) -> str:
         """
         Convert Vietnamese text to phonemes.
-        
+
         Args:
             text: Vietnamese text
-            
+
         Returns:
             str: Phonemized text
         """
         phones = self.phonemizer.phonemize([text])
         if not phones or not phones[0]:
             raise ValueError(f"Failed to phonemize text: {text}")
-        
+
         phones = phones[0].split()
         phones = ' '.join(phones)
         return phones
@@ -138,10 +178,18 @@ class VietnameseTTS:
         Returns:
             str: Generated speech codes as string
         """
+        # Normalize texts first
+        print(f"\nNormalizing text...")
+        ref_text_normalized = self.normalize_text(ref_text)
+        text_normalized = self.normalize_text(text)
+        if self.normalizer is not None:
+            print(f"  Original: {text[:50]}...")
+            print(f"  Normalized: {text_normalized[:50]}...")
+
         # Phonemize texts
         print(f"\nPhonemizing text...")
-        ref_phones = self.phonemize(ref_text)
-        input_phones = self.phonemize(text)
+        ref_phones = self.phonemize(ref_text_normalized)
+        input_phones = self.phonemize(text_normalized)
         print(f"  Ref: {ref_phones[:50]}...")
         print(f"  Input: {input_phones[:50]}...")
         

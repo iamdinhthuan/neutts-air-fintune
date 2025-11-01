@@ -20,6 +20,15 @@ from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
 
 from infer_vietnamese import VietnameseTTS, find_latest_checkpoint
 
+# Import ViNorm for Vietnamese text normalization
+try:
+    from vinorm import TTSnorm
+    VINORM_AVAILABLE = True
+except ImportError:
+    VINORM_AVAILABLE = False
+    print("Warning: vinorm not installed. Install with: pip install vinorm")
+    print("Text normalization will be skipped in Gradio UI.")
+
 
 def split_sentences_by_dot(text: str) -> List[str]:
     # Tách theo dấu chấm, loại bỏ khoảng trắng thừa và câu rỗng

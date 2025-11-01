@@ -13,7 +13,7 @@ Huấn luyện mô hình Text-to-Speech NeuTTS-Air cho tiếng Việt.
 ## 📋 Requirements
 
 ```bash
-pip install torch transformers datasets neucodec phonemizer librosa soundfile fire omegaconf loguru pandas
+pip install torch transformers datasets neucodec phonemizer librosa soundfile fire omegaconf loguru pandas vinorm
 ```
 
 **Cài đặt espeak-ng** (cho phonemizer):
@@ -27,6 +27,11 @@ brew install espeak-ng
 
 # Windows: Download từ https://github.com/espeak-ng/espeak-ng/releases
 ```
+
+**ViNorm** - Vietnamese text normalization:
+- Tự động chuẩn hóa text tiếng Việt (số, ngày tháng, từ viết tắt, etc.)
+- Cải thiện chất lượng TTS
+- Tùy chọn: Nếu không cài, text sẽ không được chuẩn hóa
 
 ## 🚀 Quick Start
 
