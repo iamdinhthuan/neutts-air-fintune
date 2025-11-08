@@ -2,7 +2,8 @@
 """
 Gradio UI cho Vietnamese TTS (NeuTTS-Air)
 
-- Tải checkpoint gần nhất trong `./checkpoints/neutts-vietnamese` (mặc định)
+- Ưu tiên tải checkpoint từ Hugging Face repo `dinthuan/neutts-air-vi` (mặc định)
+- Có thể rơi về checkpoint local mới nhất nếu không chỉ định repo HF
 - Nhập văn bản tiếng Việt, tách câu theo dấu chấm '.'
 - Dùng một audio tham chiếu và ref text để giữ giọng
 - Tổng hợp từng câu và ghép lại thành một file âm thanh
@@ -18,15 +19,20 @@ import numpy as np
 import torch
 from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor, pipeline
 
-from infer_vietnamese import VietnameseTTS, find_latest_checkpoint
+from infer_vietnamese import (
+    VietnameseTTS,
+    resolve_checkpoint_reference,
+    DEFAULT_HF_REPO,
+    DEFAULT_HF_CACHE_DIR,
+)
 
-# Import ViNorm for Vietnamese text normalization
+# Import Soe-ViNorm for Vietnamese text normalization (used in infer module)
 try:
-    from vinorm import TTSnorm
+    from soe_vinorm import SoeNormalizer  # noqa: F401
     VINORM_AVAILABLE = True
 except ImportError:
     VINORM_AVAILABLE = False
-    print("Warning: vinorm not installed. Install with: pip install vinorm")
+    print("Warning: soe_vinorm not installed. Install with: pip install soe-vinorm")
     print("Text normalization will be skipped in Gradio UI.")
 
 
@@ -41,20 +47,24 @@ _latest_ckpt_cache = {}
 _ref_codes_cache = {}
 
 
-def get_tts(checkpoint: str | None, checkpoints_dir: str, device: str) -> VietnameseTTS:
-    # Resolve checkpoint path (cache latest for a checkpoints_dir)
-    if checkpoint and len(checkpoint.strip()) > 0:
-        checkpoint_path = checkpoint.strip()
-    else:
-        if checkpoints_dir in _latest_ckpt_cache:
-            checkpoint_path = _latest_ckpt_cache[checkpoints_dir]
-        else:
-            checkpoint_path = find_latest_checkpoint(checkpoints_dir)
-            _latest_ckpt_cache[checkpoints_dir] = checkpoint_path
+def get_tts(
+    checkpoint: str | None,
+    checkpoints_dir: str,
+    hf_repo: str | None,
+    hf_cache_dir: str | None,
+    device: str,
+) -> tuple[VietnameseTTS, str]:
+    checkpoint_path, checkpoint_label = resolve_checkpoint_reference(
+        checkpoint=checkpoint,
+        checkpoints_dir=checkpoints_dir,
+        hf_repo=hf_repo,
+        hf_cache_dir=hf_cache_dir,
+        latest_checkpoint_cache=_latest_ckpt_cache,
+    )
 
     cache_key = (checkpoint_path, device)
     if cache_key in _tts_cache:
-        return _tts_cache[cache_key]
+        return _tts_cache[cache_key], checkpoint_label
 
     tts = VietnameseTTS(
         checkpoint_path=checkpoint_path,
@@ -62,7 +72,7 @@ def get_tts(checkpoint: str | None, checkpoints_dir: str, device: str) -> Vietna
         codec_device=device,
     )
     _tts_cache[cache_key] = tts
-    return tts
+    return tts, checkpoint_label
 
 
 def get_ref_codes_cached(tts: VietnameseTTS, ref_audio_file: str):
@@ -129,6 +139,8 @@ def synthesize_full_text(
     top_k: int = 50,
     checkpoint: str | None = None,
     checkpoints_dir: str = "./checkpoints/neutts-vietnamese",
+    hf_repo: str | None = DEFAULT_HF_REPO,
+    hf_cache_dir: str | None = DEFAULT_HF_CACHE_DIR,
     device: str = "cuda",
 ) -> Tuple[int, np.ndarray, str]:
     if not input_text or not input_text.strip():
@@ -145,7 +157,7 @@ def synthesize_full_text(
             raise gr.Error("Vui lòng nhập ref text hoặc bật nhận dạng Whisper: " + str(e))
 
     # Load/Cached model
-    tts = get_tts(checkpoint, checkpoints_dir, device)
+    tts, checkpoint_label = get_tts(checkpoint, checkpoints_dir, hf_repo, hf_cache_dir, device)
 
     # Encode ref audio 1 lần (cached theo đường dẫn + mtime)
     ref_codes = get_ref_codes_cached(tts, ref_audio_file)
@@ -180,14 +192,7 @@ def synthesize_full_text(
     full_wav = np.concatenate(audios) if audios else np.array([], dtype=np.float32)
 
     # Trả về audio và thông tin debug
-    # Lấy checkpoint thực tế từ cache nếu có
-    actual_ckpt = None
-    if (checkpoint and len(checkpoint.strip()) > 0):
-        actual_ckpt = checkpoint.strip()
-    else:
-        actual_ckpt = _latest_ckpt_cache.get(checkpoints_dir, None) or find_latest_checkpoint(checkpoints_dir)
-
-    debug_info = f"Câu: {len(sentences)} | Checkpoint: {actual_ckpt} | Thiết bị: {device}"
+    debug_info = f"Câu: {len(sentences)} | Checkpoint: {checkpoint_label} | Thiết bị: {device}"
     return (sr, full_wav), debug_info
 
 
@@ -216,6 +221,17 @@ with gr.Blocks(title="NeuTTS-Air Vietnamese TTS") as demo:
             checkpoint = gr.Textbox(label="Checkpoint (để trống để tự tìm mới nhất)", value="")
             checkpoints_dir = gr.Textbox(label="Thư mục checkpoints", value="./checkpoints/neutts-vietnamese")
             device = gr.Dropdown(choices=["cuda", "cpu"], value="cuda", label="Thiết bị")
+        with gr.Row():
+            hf_repo = gr.Textbox(
+                label="Hugging Face repo (ưu tiên)",
+                value=DEFAULT_HF_REPO,
+                placeholder="dinthuan/neutts-air-vi",
+            )
+            hf_cache_dir = gr.Textbox(
+                label="Thư mục cache HF (bỏ trống dùng cache mặc định)",
+                value=DEFAULT_HF_CACHE_DIR,
+                placeholder="./checkpoints/hf-cache",
+            )
 
     with gr.Row():
         asr_lang = gr.Dropdown(choices=["vi", "en", "auto"], value="vi", label="Ngôn ngữ ASR (Whisper)")
@@ -230,7 +246,18 @@ with gr.Blocks(title="NeuTTS-Air Vietnamese TTS") as demo:
 
     btn.click(
         fn=synthesize_full_text,
-        inputs=[input_text, ref_audio, ref_text, temperature, top_k, checkpoint, checkpoints_dir, device],
+        inputs=[
+            input_text,
+            ref_audio,
+            ref_text,
+            temperature,
+            top_k,
+            checkpoint,
+            checkpoints_dir,
+            hf_repo,
+            hf_cache_dir,
+            device,
+        ],
         outputs=[audio_out, debug],
     )
 

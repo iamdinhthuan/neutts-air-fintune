@@ -12,17 +12,23 @@ from pathlib import Path
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from neucodec import NeuCodec
 from phonemizer.backend import EspeakBackend
+from huggingface_hub import snapshot_download
 import re
 import argparse
+from typing import Dict, Tuple
 
-# Import ViNorm for Vietnamese text normalization
+# Import Soe-ViNorm for Vietnamese text normalization
 try:
-    from vinorm import TTSnorm
+    from soe_vinorm import SoeNormalizer
     VINORM_AVAILABLE = True
 except ImportError:
     VINORM_AVAILABLE = False
-    print("Warning: vinorm not installed. Install with: pip install vinorm")
+    print("Warning: soe_vinorm not installed. Install with: pip install soe-vinorm")
     print("Text normalization will be skipped.")
+
+
+DEFAULT_HF_REPO = "dinthuan/neutts-air-vi"
+DEFAULT_HF_CACHE_DIR = os.path.join("checkpoints", "hf-cache")
 
 
 class VietnameseTTS:
@@ -84,8 +90,8 @@ class VietnameseTTS:
         # Initialize ViNorm for text normalization
         print(f"\n[5/5] Initializing Vietnamese text normalizer...")
         if VINORM_AVAILABLE:
-            self.normalizer = TTSnorm
-            print("✓ ViNorm loaded (text will be normalized)")
+            self.normalizer = SoeNormalizer()
+            print("✓ Soe ViNorm loaded (text will be normalized)")
         else:
             self.normalizer = None
             print("⚠ ViNorm not available (text normalization skipped)")
@@ -128,12 +134,7 @@ class VietnameseTTS:
             str: Normalized text
         """
         if self.normalizer is not None:
-            # Normalize with ViNorm
-            # punc=False: keep punctuation
-            # unknown=True: replace unknown words
-            # lower=False: keep original case
-            # rule=False: use dictionary checking
-            normalized = self.normalizer(text, punc=False, unknown=True, lower=False, rule=False)
+            normalized = self.normalizer.normalize(text)
             return normalized
         else:
             # No normalization available
@@ -330,6 +331,65 @@ def find_latest_checkpoint(checkpoints_dir: str) -> str:
     return latest
 
 
+def download_hf_checkpoint(repo_id: str, cache_dir: str | None = DEFAULT_HF_CACHE_DIR) -> str:
+    """Download (or reuse cached) checkpoint snapshot from Hugging Face Hub."""
+    repo_id = (repo_id or "").strip()
+    if not repo_id:
+        raise ValueError("Hugging Face repo ID cannot be empty.")
+
+    print(f"\nFetching checkpoint from Hugging Face: {repo_id}")
+    snapshot_kwargs = {
+        "repo_id": repo_id,
+        "local_dir_use_symlinks": False,
+        "resume_download": True,
+    }
+
+    cache_dir = (cache_dir or "").strip()
+    if cache_dir:
+        os.makedirs(cache_dir, exist_ok=True)
+        local_dir = os.path.join(cache_dir, repo_id.replace("/", "_"))
+        snapshot_kwargs["local_dir"] = local_dir
+
+    local_path = snapshot_download(**snapshot_kwargs)
+    print(f"✓ Hugging Face checkpoint ready at: {local_path}")
+    return local_path
+
+
+def resolve_checkpoint_reference(
+    checkpoint: str | None = None,
+    checkpoints_dir: str | None = None,
+    hf_repo: str | None = DEFAULT_HF_REPO,
+    hf_cache_dir: str | None = DEFAULT_HF_CACHE_DIR,
+    latest_checkpoint_cache: Dict[str, str] | None = None,
+) -> Tuple[str, str]:
+    """Resolve which checkpoint path should be used for inference."""
+    explicit_checkpoint = (checkpoint or "").strip()
+    if explicit_checkpoint:
+        desc = f"Explicit checkpoint provided: {explicit_checkpoint}"
+        return explicit_checkpoint, desc
+
+    hf_repo = (hf_repo or "").strip()
+    if hf_repo:
+        repo_path = download_hf_checkpoint(hf_repo, hf_cache_dir)
+        desc = f"Hugging Face repo: {hf_repo}"
+        return repo_path, desc
+
+    if not checkpoints_dir:
+        raise ValueError("No checkpoint path or Hugging Face repo provided.")
+
+    checkpoints_dir = checkpoints_dir.strip()
+    if latest_checkpoint_cache is not None and checkpoints_dir in latest_checkpoint_cache:
+        cached_path = latest_checkpoint_cache[checkpoints_dir]
+        desc = f"Cached latest checkpoint in {checkpoints_dir}: {cached_path}"
+        return cached_path, desc
+
+    latest_local = find_latest_checkpoint(checkpoints_dir)
+    if latest_checkpoint_cache is not None:
+        latest_checkpoint_cache[checkpoints_dir] = latest_local
+    desc = f"Latest checkpoint in {checkpoints_dir}: {latest_local}"
+    return latest_local, desc
+
+
 def main():
     parser = argparse.ArgumentParser(description="Vietnamese TTS Inference")
     parser.add_argument(
@@ -363,6 +423,18 @@ def main():
         help="Root checkpoints directory (used if --checkpoint not specified)"
     )
     parser.add_argument(
+        "--hf_repo",
+        type=str,
+        default=DEFAULT_HF_REPO,
+        help=f"Hugging Face repo ID to download checkpoints (set empty to skip, default: {DEFAULT_HF_REPO})"
+    )
+    parser.add_argument(
+        "--hf_cache_dir",
+        type=str,
+        default=DEFAULT_HF_CACHE_DIR,
+        help="Local directory to cache Hugging Face checkpoints (empty string to use default HF cache)"
+    )
+    parser.add_argument(
         "--output",
         type=str,
         default="output.wav",
@@ -389,11 +461,13 @@ def main():
     
     args = parser.parse_args()
     
-    # Find checkpoint
-    if args.checkpoint is None:
-        checkpoint_path = find_latest_checkpoint(args.checkpoints_dir)
-    else:
-        checkpoint_path = args.checkpoint
+    checkpoint_path, checkpoint_desc = resolve_checkpoint_reference(
+        checkpoint=args.checkpoint,
+        checkpoints_dir=args.checkpoints_dir,
+        hf_repo=args.hf_repo,
+        hf_cache_dir=args.hf_cache_dir,
+    )
+    print(f"\nUsing checkpoint source: {checkpoint_desc}")
     
     # Initialize TTS
     tts = VietnameseTTS(
@@ -415,4 +489,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

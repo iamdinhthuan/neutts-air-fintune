@@ -13,7 +13,7 @@ Huấn luyện mô hình Text-to-Speech NeuTTS-Air cho tiếng Việt.
 ## 📋 Requirements
 
 ```bash
-pip install torch transformers datasets neucodec phonemizer librosa soundfile fire omegaconf loguru pandas vinorm
+pip install torch transformers datasets neucodec phonemizer librosa soundfile fire omegaconf loguru pandas soe-vinorm
 ```
 
 **Cài đặt espeak-ng** (cho phonemizer):
@@ -422,4 +422,3 @@ This project is based on [NeuTTS-Air](https://github.com/neuphonic/neutts-air) b
 **Happy training!** 🚀
 
 For issues or questions, please open an issue on GitHub.
-
