@@ -27,7 +27,7 @@ except ImportError:
     print("Text normalization will be skipped.")
 
 
-DEFAULT_HF_REPO = "dinthuan/neutts-air-vi"
+DEFAULT_HF_REPO = "dinhthuan/neutts-air-vi"
 DEFAULT_HF_CACHE_DIR = os.path.join("checkpoints", "hf-cache")
 
 
